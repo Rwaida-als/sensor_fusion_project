@@ -1,5 +1,0 @@
-Time,Number of Bumps,Number of Doors Detected,Distance to Wall,Right IR Reading,Odometer X (mm),Odometer Y (mm),Odometer Heading (degrees),Surface,Speed
-0.01,0,0,3821.0,3821.0,0.0,0.0,89.9,Carpet,100
-0.83,0,0,1078.0,1078.0,0.3,8.5,89.3,Carpet,100
-1.5,1,1,831.0,831.0,0.8,26.7,88.9,Carpet,100
-2.27,1,1,973.0,973.0,1.0,16.1,90.8,Carpet,100

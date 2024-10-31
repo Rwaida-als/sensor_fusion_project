@@ -1,7 +1,0 @@
-IR Value Category,Door Detected,Very Close (0-500),Close (500-1500),Moderate (1500-3000),Far (>3000)
-Low,False,0.75,0.08,0.08,0.08
-Low,True,0.5,0.17,0.17,0.17
-Medium,False,0.08,0.75,0.08,0.08
-Medium,True,0.2,0.4,0.2,0.2
-High,False,0.2,0.2,0.2,0.4
-High,True,0.25,0.25,0.25,0.25

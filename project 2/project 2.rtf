@@ -1,0 +1,375 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue255;\red255\green255\blue254;\red0\green0\blue0;
+\red15\green112\blue1;\red19\green118\blue70;\red144\green1\blue18;\red107\green0\blue1;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c100000;\cssrgb\c100000\c100000\c99608;\cssrgb\c0\c0\c0;
+\cssrgb\c0\c50196\c0;\cssrgb\c3529\c52549\c34510;\cssrgb\c63922\c8235\c8235;\cssrgb\c50196\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 import\cf0 \strokec4  asyncio\cb1 \strokec4 \
+\cf2 \cb3 \strokec2 import\cf0 \strokec4  time\cb1 \strokec4 \
+\cf2 \cb3 \strokec2 import\cf0 \strokec4  math\cb1 \strokec4 \
+\cf2 \cb3 \strokec2 from\cf0 \strokec4  irobot_edu_sdk.backend.bluetooth \cf2 \strokec2 import\cf0 \strokec4  Bluetooth\cb1 \strokec4 \
+\cf2 \cb3 \strokec2 from\cf0 \strokec4  irobot_edu_sdk.robots \cf2 \strokec2 import\cf0 \strokec4  event, Create3\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Create a robot instance for Create3\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 robot = Create3(Bluetooth())\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Global variables\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 number_of_bumps = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 possible_doors_detected = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 last_door_collision_time = \cf2 \strokec2 None\cf0 \strokec4   \cf5 \strokec5 # Time when the last collision that counted towards a door occurred\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 door_time_threshold = \cf6 \strokec6 20\cf0 \strokec4   \cf5 \strokec5 # Time in seconds to consider collisions as part of the same door\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 waiting_for_wall_time = \cf6 \strokec6 8\cf0 \strokec4   \cf5 \strokec5 # Time in seconds to wait with no collisions to ensure it's next to a wall\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 waiting_start_time = \cf2 \strokec2 None\cf0 \strokec4   \cf5 \strokec5 # Time when waiting for wall started\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # PID parameters\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 kp = \cf6 \strokec6 0.4\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 ki = \cf6 \strokec6 0.02\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 kd = \cf6 \strokec6 0.1\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 previous_error = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 integral = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 dt = \cf6 \strokec6 0.1\cf0 \strokec4   \cf5 \strokec5 # Time step\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Desired distance from the wall in cm\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 wall_distance = \cf6 \strokec6 8.5\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Robot speed in cm/s\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 robot_speed = \cf6 \strokec6 5\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 max_speed = \cf6 \strokec6 15\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 min_speed = \cf6 \strokec6 1\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # States\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 state = \cf7 \strokec7 'Wall Following'\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Global variables for pause and collision\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 is_paused = \cf2 \strokec2 False\cf0 \cb1 \strokec4 \
+\cb3 \strokec4 bumper_triggered = \cf2 \strokec2 False\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Flag to indicate whether we have switched sides\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 switched_sides = \cf2 \strokec2 False\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Variable to keep track of the current side ('right' or 'left')\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 current_side = \cf7 \strokec7 'right'\cf0 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Event handler for bump detection\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf8 \cb3 \strokec8 @event\cf0 \strokec4 (robot.when_bumped, [\cf2 \strokec2 True\cf0 \strokec4 , \cf2 \strokec2 True\cf0 \strokec4 ])\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  handle_collision(robot):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Handle collision events and detect possible doors based on collisions."""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  bumper_triggered, state, number_of_bumps, possible_doors_detected\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  last_door_collision_time, waiting_start_time, current_side\cb1 \strokec4 \
+\cb3 \strokec4     bumper_triggered = \cf2 \strokec2 True\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     number_of_bumps += \cf6 \strokec6 1\cf0 \cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 'Collision detected!'\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.set_lights_on_rgb(\cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )  \cf5 \strokec5 # Red for collision\cf0 \cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Door detection based on collisions\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     current_time = time.time()\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 if\cf0 \strokec4  last_door_collision_time \cf2 \strokec2 is\cf0 \strokec4  \cf2 \strokec2 None\cf0 \strokec4  \cf2 \strokec2 or\cf0 \strokec4  (current_time - last_door_collision_time) > door_time_threshold:\cb1 \strokec4 \
+\cb3 \strokec4         possible_doors_detected += \cf6 \strokec6 1\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 "Possible door detected! Total possible doors detected: \{possible_doors_detected\}"\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         last_door_collision_time = current_time\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf2 \strokec2 if\cf0 \strokec4  \cf2 \strokec2 not\cf0 \strokec4  switched_sides:\cb1 \strokec4 \
+\cb3 \strokec4             \cf5 \strokec5 # Before switching sides, wait after detecting the third door\cf0 \cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 if\cf0 \strokec4  possible_doors_detected == \cf6 \strokec6 3\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4                 \cf5 \strokec5 # Start the waiting period to ensure the robot is next to a wall\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                 waiting_start_time = current_time\cb1 \strokec4 \
+\cb3 \strokec4                 \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Third door detected on right side. Starting waiting period to ensure robot is next to a wall."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             \cf5 \strokec5 # After switching sides, stop after detecting the third door\cf0 \cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 if\cf0 \strokec4  possible_doors_detected == \cf6 \strokec6 3\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4                 \cf5 \strokec5 # Start the waiting period before stopping\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                 waiting_start_time = current_time\cb1 \strokec4 \
+\cb3 \strokec4                 \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Third door detected on left side. Starting waiting period to ensure robot is next to a wall."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 "Collision within \{door_time_threshold\} seconds of last collision. Not counting as a new door."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # If we're in the waiting period and a collision occurs, reset the waiting timer\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 if\cf0 \strokec4  waiting_start_time \cf2 \strokec2 is\cf0 \strokec4  \cf2 \strokec2 not\cf0 \strokec4  \cf2 \strokec2 None\cf0 \strokec4  \cf2 \strokec2 and\cf0 \strokec4  possible_doors_detected == \cf6 \strokec6 3\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         waiting_start_time = current_time\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Collision occurred during waiting period. Resetting waiting timer."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Collision handling behavior adjusted based on current side\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  collision_avoidance(current_side)\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  asyncio.sleep(\cf6 \strokec6 1\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     bumper_triggered = \cf2 \strokec2 False\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     set_lights()\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  collision_avoidance(side):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Adjust collision handling based on the side the robot is following."""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 if\cf0 \strokec4  side == \cf7 \strokec7 'right'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf5 \strokec5 # Behavior when following the right wall\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.move(\cf6 \strokec6 -20\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.turn_left(\cf6 \strokec6 45\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.move(\cf6 \strokec6 20\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  backoff(side)\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 elif\cf0 \strokec4  side == \cf7 \strokec7 'left'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf5 \strokec5 # Behavior when following the left wall\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.move(\cf6 \strokec6 -20\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.turn_right(\cf6 \strokec6 45\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.move(\cf6 \strokec6 20\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  backoff(side)\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 "Unknown side '\{side\}' in collision_avoidance."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  backoff(side):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Back off from an obstacle, adjusted for the side."""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.set_lights_on_rgb(\cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 80\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )  \cf5 \strokec5 # Orange for backoff\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.move(\cf6 \strokec6 -10\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 if\cf0 \strokec4  side == \cf7 \strokec7 'right'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.turn_left(\cf6 \strokec6 45\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 elif\cf0 \strokec4  side == \cf7 \strokec7 'left'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.turn_right(\cf6 \strokec6 45\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 "Unknown side '\{side\}' in backoff."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 def\cf0 \strokec4  current_distance(ir_value):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Calculate current distance to wall"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf5 \strokec5 # Placeholder for actual sensor calibration\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf5 \strokec5 # You may need to adjust A and B based on your sensor characteristics\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     A = \cf6 \strokec6 2000\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     B = \cf6 \strokec6 -150\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     d = (ir_value - A) / B\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 return\cf0 \strokec4  d\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 def\cf0 \strokec4  pid_distance(d1, d2, side=\cf7 \strokec7 'right'\cf0 \strokec4 ):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Calculate PID correction"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  integral, previous_error\cb1 \strokec4 \
+\cb3 \strokec4     d = current_distance((d1 + d2) / \cf6 \strokec6 2\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     error = d - wall_distance\cb1 \strokec4 \
+\cb3 \strokec4     integral += error * dt\cb1 \strokec4 \
+\cb3 \strokec4     derivative = (error - previous_error) / dt\cb1 \strokec4 \
+\cb3 \strokec4     correction = kp * error + ki * integral + kd * derivative\cb1 \strokec4 \
+\cb3 \strokec4     correction = \cf2 \strokec2 max\cf0 \strokec4 (\cf2 \strokec2 min\cf0 \strokec4 (correction, \cf6 \strokec6 5\cf0 \strokec4 ), \cf6 \strokec6 -5\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     previous_error = error\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Invert correction if following the left wall\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 if\cf0 \strokec4  side == \cf7 \strokec7 'left'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         correction = -correction\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf2 \strokec2 return\cf0 \strokec4  correction, d\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 def\cf0 \strokec4  set_lights():\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Set robot lights based on current state"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  _set_lights():\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 if\cf0 \strokec4  state == \cf7 \strokec7 'Wall Following'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 await\cf0 \strokec4  robot.set_lights_on_rgb(\cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 165\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )  \cf5 \strokec5 # Orange\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 elif\cf0 \strokec4  state == \cf7 \strokec7 'Switching Sides'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 await\cf0 \strokec4  robot.set_lights_on_rgb(\cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )  \cf5 \strokec5 # Yellow\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 await\cf0 \strokec4  robot.set_lights_on_rgb(\cf6 \strokec6 0\cf0 \strokec4 , \cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 255\cf0 \strokec4 )  \cf5 \strokec5 # Cyan\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     asyncio.create_task(_set_lights())\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Event handler for button press to pause/resume\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf8 \cb3 \strokec8 @event\cf0 \strokec4 (robot.when_touched, [\cf2 \strokec2 True\cf0 \strokec4 , \cf2 \strokec2 False\cf0 \strokec4 ])  \cf5 \strokec5 # Left button (\'95) pressed\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  on_button_press(robot):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Toggle pause/resume when left button is pressed"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  is_paused\cb1 \strokec4 \
+\cb3 \strokec4     is_paused = \cf2 \strokec2 not\cf0 \strokec4  is_paused\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 'Robot '\cf0 \strokec4  + (\cf7 \strokec7 'paused'\cf0 \strokec4  \cf2 \strokec2 if\cf0 \strokec4  is_paused \cf2 \strokec2 else\cf0 \strokec4  \cf7 \strokec7 'resumed'\cf0 \strokec4 ))\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 if\cf0 \strokec4  is_paused:\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.set_wheel_speeds(\cf6 \strokec6 0\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.set_lights_on_rgb(\cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 255\cf0 \strokec4 , \cf6 \strokec6 255\cf0 \strokec4 )  \cf5 \strokec5 # White to indicate pause\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         set_lights()\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  forward():\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Move the robot forward with current speeds"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.set_wheel_speeds(robot_speed, robot_speed)\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  wall_following_control(side=\cf7 \strokec7 'right'\cf0 \strokec4 ):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Main control loop for wall following"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  previous_error, integral, is_paused, state, bumper_triggered\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  waiting_start_time, switched_sides, possible_doors_detected\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  last_door_collision_time, current_side\cb1 \strokec4 \
+\cb3 \strokec4     current_side = side  \cf5 \strokec5 # Update the current side\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 'Starting wall following on the \{side\} side.'\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     set_lights()\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf2 \strokec2 while\cf0 \strokec4  \cf2 \strokec2 True\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  asyncio.sleep(dt)\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf2 \strokec2 if\cf0 \strokec4  is_paused \cf2 \strokec2 or\cf0 \strokec4  bumper_triggered:\cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 await\cf0 \strokec4  robot.set_wheel_speeds(\cf6 \strokec6 0\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 continue\cf0 \cb1 \strokec4 \
+\
+\cb3 \strokec4         current_time = time.time()\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf5 \strokec5 # Check if waiting period is active after detecting the third door\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 if\cf0 \strokec4  possible_doors_detected == \cf6 \strokec6 3\cf0 \strokec4  \cf2 \strokec2 and\cf0 \strokec4  waiting_start_time \cf2 \strokec2 is\cf0 \strokec4  \cf2 \strokec2 not\cf0 \strokec4  \cf2 \strokec2 None\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             \cf5 \strokec5 # Check if 8 seconds have passed with no collisions\cf0 \cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 if\cf0 \strokec4  (current_time - waiting_start_time) >= waiting_for_wall_time:\cb1 \strokec4 \
+\cb3 \strokec4                 \cf2 \strokec2 if\cf0 \strokec4  \cf2 \strokec2 not\cf0 \strokec4  switched_sides:\cb1 \strokec4 \
+\cb3 \strokec4                     \cf5 \strokec5 # Perform the maneuvers and switch sides\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     state = \cf7 \strokec7 'Switching Sides'\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     set_lights()\cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Waiting period completed. Switching sides to continue wall following."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 await\cf0 \strokec4  switch_sides()\cb1 \strokec4 \
+\cb3 \strokec4                     \cf5 \strokec5 # Reset variables for the other side\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     possible_doors_detected = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     last_door_collision_time = \cf2 \strokec2 None\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     previous_error = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     integral = \cf6 \strokec6 0\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     switched_sides = \cf2 \strokec2 True\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     waiting_start_time = \cf2 \strokec2 None\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     \cf5 \strokec5 # Continue wall following on the other side\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 await\cf0 \strokec4  wall_following_control(side=\cf7 \strokec7 'left'\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 break\cf0 \strokec4   \cf5 \strokec5 # Exit the current loop\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                 \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4                     \cf5 \strokec5 # Stop the robot after waiting period on the left side\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Waiting period completed on left side. Stopping the robot."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 await\cf0 \strokec4  robot.set_wheel_speeds(\cf6 \strokec6 0\cf0 \strokec4 , \cf6 \strokec6 0\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4                     state = \cf7 \strokec7 'Stopped'\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                     set_lights()\cb1 \strokec4 \
+\cb3 \strokec4                     \cf2 \strokec2 break\cf0 \strokec4   \cf5 \strokec5 # Exit the loop to stop\cf0 \cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4                 \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 "Waiting to ensure robot is next to wall... (\{current_time - waiting_start_time:.1f\}s elapsed)"\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4                 \cf5 \strokec5 # Continue wall following during waiting period\cf0 \cb1 \strokec4 \
+\cb3 \strokec4                 \cf2 \strokec2 pass\cf0 \cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf5 \strokec5 # Get sensor readings\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         ir_proximity = \cf2 \strokec2 await\cf0 \strokec4  robot.get_ir_proximity()\cb1 \strokec4 \
+\cb3 \strokec4         sensors = ir_proximity.sensors\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf5 \strokec5 # Adjust sensor index based on the side\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 if\cf0 \strokec4  side == \cf7 \strokec7 'right'\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             d1 = sensors[\cf6 \strokec6 -1\cf0 \strokec4 ]  \cf5 \strokec5 # Use the right-most sensor\cf0 \cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 await\cf0 \strokec4  asyncio.sleep(\cf6 \strokec6 0.05\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4             ir_proximity = \cf2 \strokec2 await\cf0 \strokec4  robot.get_ir_proximity()\cb1 \strokec4 \
+\cb3 \strokec4             sensors = ir_proximity.sensors\cb1 \strokec4 \
+\cb3 \strokec4             d2 = sensors[\cf6 \strokec6 -1\cf0 \strokec4 ]\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 else\cf0 \strokec4 :\cb1 \strokec4 \
+\cb3 \strokec4             d1 = sensors[\cf6 \strokec6 0\cf0 \strokec4 ]  \cf5 \strokec5 # Use the left-most sensor\cf0 \cb1 \strokec4 \
+\cb3 \strokec4             \cf2 \strokec2 await\cf0 \strokec4  asyncio.sleep(\cf6 \strokec6 0.05\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4             ir_proximity = \cf2 \strokec2 await\cf0 \strokec4  robot.get_ir_proximity()\cb1 \strokec4 \
+\cb3 \strokec4             sensors = ir_proximity.sensors\cb1 \strokec4 \
+\cb3 \strokec4             d2 = sensors[\cf6 \strokec6 0\cf0 \strokec4 ]\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf5 \strokec5 # Calculate PID correction and current distance\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         correction, curr_distance = pid_distance(d1, d2, side=side)\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf5 \strokec5 # Adjust wheel speeds based on correction\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         left_speed = robot_speed + correction\cb1 \strokec4 \
+\cb3 \strokec4         right_speed = robot_speed - correction\cb1 \strokec4 \
+\cb3 \strokec4         \cf5 \strokec5 # Limit speeds\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         left_speed = \cf2 \strokec2 max\cf0 \strokec4 (\cf2 \strokec2 min\cf0 \strokec4 (left_speed, max_speed), min_speed)\cb1 \strokec4 \
+\cb3 \strokec4         right_speed = \cf2 \strokec2 max\cf0 \strokec4 (\cf2 \strokec2 min\cf0 \strokec4 (right_speed, max_speed), min_speed)\cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 await\cf0 \strokec4  robot.set_wheel_speeds(left_speed, right_speed)\cb1 \strokec4 \
+\
+\cb3 \strokec4         \cf5 \strokec5 # Print status including number of possible doors detected\cf0 \cb1 \strokec4 \
+\cb3 \strokec4         \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 'State: \{state\}, Side: \{side.capitalize()\}, Distance: \{curr_distance:.2f\}cm, Correction: \{correction:.2f\}, Possible Doors Detected: \{possible_doors_detected\}'\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  switch_sides():\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Perform maneuvers to switch sides and continue wall following on the opposite wall."""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  state\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Performing side-switch maneuvers."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Turn 90 degrees to the left\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Turning 90 degrees to the left."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.turn_left(\cf6 \strokec6 90\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Move forward 3 cm\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Moving forward 3 cm."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.move(\cf6 \strokec6 3\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Turn another 90 degrees to the left\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Turning another 90 degrees to the left."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.turn_left(\cf6 \strokec6 90\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Update state\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     state = \cf7 \strokec7 'Wall Following'\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     set_lights()\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  main_function():\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf2 \strokec2 global\cf0 \strokec4  start_time\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "\\nStarting robot movement."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     start_time = time.time()\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Reset navigation to (0, 0, 90\'b0)\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  robot.reset_navigation()\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Navigation reset to origin."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # Start wall following control\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  wall_following_control(side=\cf7 \strokec7 'right'\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\cb3 \strokec4     \cf5 \strokec5 # After wall following on the opposite side is complete, the robot will stop\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Wall following on both sides complete."\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Event handler for when the play button is pressed\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf8 \cb3 \strokec8 @event\cf0 \strokec4 (robot.when_play)\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 async\cf0 \strokec4  \cf2 \strokec2 def\cf0 \strokec4  when_play(robot):\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf5 \strokec5 # Now, run the main function\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 await\cf0 \strokec4  main_function()\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 def\cf0 \strokec4  cleanup():\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4     \cf7 \strokec7 """Cleanup function"""\cf0 \cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (\cf7 \strokec7 "Program terminated. Cleanup complete."\cf0 \strokec4 )\cb1 \strokec4 \
+\cb3 \strokec4     \cf2 \strokec2 print\cf0 \strokec4 (f\cf7 \strokec7 "Total possible doors detected during the run: \{possible_doors_detected\}"\cf0 \strokec4 )\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 import\cf0 \strokec4  atexit\cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 atexit.register(cleanup)\cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 # Start the robot's event loop\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3 \strokec4 robot.play()\cb1 \strokec4 \
+\
+}
